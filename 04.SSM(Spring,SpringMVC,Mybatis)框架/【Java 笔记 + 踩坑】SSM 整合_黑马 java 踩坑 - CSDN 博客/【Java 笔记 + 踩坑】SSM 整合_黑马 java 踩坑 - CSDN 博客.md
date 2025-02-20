@@ -1,0 +1,2590 @@
+---
+url: https://blog.csdn.net/qq_40991313/article/details/126430582
+title: 【Java 笔记 + 踩坑】SSM 整合_黑马 java 踩坑 - CSDN 博客
+date: 2025-02-20 09:40:15
+tag: 
+summary: 
+---
+ **导航：**
+
+[【Java 笔记 + 踩坑汇总】Java 基础 + JavaWeb+SSM+SpringBoot+SpringCloud + 瑞吉外卖 / 谷粒商城 / 学成在线 + 设计模式 + 面试题汇总 + 性能调优 / 架构设计 + 源码解析](https://blog.csdn.net/qq_40991313/article/details/126646289?csdn_share_tail=%7B%22type%22%3A%22blog%22%2C%22rType%22%3A%22article%22%2C%22rId%22%3A%22126646289%22%2C%22source%22%3A%22qq_40991313%22%7D "【Java笔记+踩坑汇总】Java基础+JavaWeb+SSM+SpringBoot+SpringCloud+瑞吉外卖/谷粒商城/学成在线+设计模式+面试题汇总+性能调优/架构设计+源码解析")
+
+**目录**
+
+[1，SSM 整合入门案例，图书的增删改查](#t0)
+
+[1.1 流程分析](#t1)
+
+[1.2 环境准备](#t2)
+
+[1.3 代码实现](#t3)
+
+[1.4 单元测试](#t4)
+
+[1.5 PostMan 测试表现层方法](#t5)
+
+[2，统一结果封装，前后端数据传输协议](#t6)
+
+[2.1 概述](#t7)
+
+[2.2 代码实现](#t8)
+
+[2.2.1 环境准备](#t9)
+
+[2.2.2 结果封装](#t10)
+
+[2.3 标准结果类代码](#t11)
+
+[3，统一异常处理](#t12)
+
+[3.1 问题描述](#t13)
+
+[3.2 异常处理器的使用](#t14)
+
+[3.2.1 环境准备](#t15)
+
+[3.2.2 代码实现](#t16)
+
+[知识点 @RestControllerAdvice@ExceptionHandler](#t17)
+
+[3.3 项目异常处理方案](#t18)
+
+[3.3.1 异常分类](#t19)
+
+[3.3.2 异常解决方案](#t20)
+
+[3.3.3 异常解决方案的具体实现](#t21)
+
+[4，前后台协议联调](#t22)
+
+[4.0 坑点总结](#t23)
+
+[4.1 环境准备](#t24)
+
+[4.2 列表功能](#t25)
+
+[4.3 添加功能](#t26)
+
+[4.4 添加功能状态处理](#t27)
+
+[4.5 修改功能](#t28)
+
+[4.6 删除功能](#t29)
+
+[5，拦截器](#t30)
+
+[5.1 拦截器概念](#t31)
+
+[5.2 拦截器入门案例](#t32)
+
+[5.2.1 环境准备](#t33)
+
+[5.2.2 拦截器开发](#t34)
+
+[5.3 拦截器参数](#t35)
+
+[5.3.1 前置处理方法](#t36)
+
+[5.3.2 后置处理方法](#t37)
+
+[5.3.3 完成处理方法](#t38)
+
+[5.4 拦截器链配置](#t39)
+
+[5.4.1 配置多个拦截器](#t40)
+
+## 1，SSM 整合入门案例，图书的增删改查
+
+### 1.1 流程分析
+
+**(1) 创建工程**
+
+*   创建一个 Maven 的 web 工程
+*   pom.xml 添加 SSM 需要的依赖 jar 包
+*   编写 Web 项目的入口配置类，实现`AbstractAnnotationConfigDispatcherServletInitializer`重写以下方法
+    *   getRootConfigClasses() ：返回 Spring 的配置类 -> 需要 **SpringConfig** 配置类
+    *   getServletConfigClasses() ：返回 SpringMVC 的配置类 -> 需要 **SpringMvcConfig** 配置类
+    *   getServletMappings() : 设置 SpringMVC 请求拦截路径规则
+    *   getServletFilters() ：设置过滤器，解决 POST 请求中文乱码问题
+
+**(2)SSM 整合** [**重点是各个配置的编写**]
+
+*   SpringConfig
+    *   标识该类为配置类 @Configuration
+    *   扫描 Service 所在的包 @ComponentScan
+    *   在 Service 层要管理事务 @EnableTransactionManagement
+    *   读取外部的 properties 配置文件 @PropertySource
+    *   整合 Mybatis 需要引入 Mybatis 相关配置类 @Import
+        *   第三方数据源配置类 JdbcConfig
+            *   构建 DataSource 数据源，DruidDataSouroce, 需要注入数据库连接四要素， @Bean @Value
+            *   构建平台事务管理器，DataSourceTransactionManager,@Bean
+        *   Mybatis 配置类 MybatisConfig
+            *   构建 SqlSessionFactoryBean 并设置别名扫描与数据源，@Bean
+            *   构建 MapperScannerConfigurer 并设置 DAO 层的包扫描
+*   SpringMvcConfig
+    *   标识该类为配置类 @Configuration
+    *   扫描 Controller 所在的包 @ComponentScan
+    *   开启 SpringMVC 注解支持 @EnableWebMvc
+
+**(3) 功能模块 [与具体的业务模块有关]**
+
+*   创建数据库表
+*   根据数据库表创建对应的模型类
+*   通过 Dao 层完成数据库表的增删改查 (接口 + 自动代理)
+*   编写 Service 层 [Service 接口 + 实现类]
+    *   @Service
+    *   @Transactional
+    *   整合 Junit 对业务层进行单元测试
+        *   @RunWith
+        *   @ContextConfiguration
+        *   @Test
+*   编写 Controller 层
+    *   接收请求 @RequestMapping @GetMapping @PostMapping @PutMapping @DeleteMapping
+    *   接收数据 简单、POJO、嵌套 POJO、集合、数组、JSON 数据类型
+        *   @RequestParam
+        *   @PathVariable
+        *   @RequestBody
+    *   转发业务层
+        *   @Autowired
+    *   响应结果
+        *   @ResponseBody
+
+### 1.2 环境准备
+
+掌握上述的知识点后，接下来，我们就可以按照上述的步骤一步步的来完成 SSM 的整合。
+
+**步骤 1：创建 Maven 的 web 项目**
+
+可以使用 Maven 的骨架创建
+
+![](<assets/1740015616115.png>)
+
+**步骤 2: 添加依赖**
+
+pom.xml 添加 SSM 所需要的依赖 jar 包
+
+**SpringMVC 相关：**javax.**servlet**-api,spring-**webmvc**(包括了 spring-context),**javkson**-databind
+
+**Spring 相关：**spring-**jdbc**,spring-**test**,**junit**
+
+**数据库相关：**mybatis,mybatis-spring,mysql,druid
+
+```
+<?xml version="1.0" encoding="UTF-8"?>
+ 
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+ 
+  <groupId>com.itheima</groupId>
+  <artifactId>springmvc_08_ssm</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <packaging>war</packaging>
+ 
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-webmvc</artifactId>
+      <version>5.2.10.RELEASE</version>
+    </dependency>
+ 
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-jdbc</artifactId>
+      <version>5.2.10.RELEASE</version>
+    </dependency>
+ 
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-test</artifactId>
+      <version>5.2.10.RELEASE</version>
+    </dependency>
+ 
+    <dependency>
+      <groupId>org.mybatis</groupId>
+      <artifactId>mybatis</artifactId>
+      <version>3.5.6</version>
+    </dependency>
+ 
+    <dependency>
+      <groupId>org.mybatis</groupId>
+      <artifactId>mybatis-spring</artifactId>
+      <version>1.3.0</version>
+    </dependency>
+ 
+    <dependency>
+      <groupId>mysql</groupId>
+      <artifactId>mysql-connector-java</artifactId>
+      <version>5.1.47</version>
+    </dependency>
+ 
+    <dependency>
+      <groupId>com.alibaba</groupId>
+      <artifactId>druid</artifactId>
+      <version>1.1.16</version>
+    </dependency>
+ 
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.12</version>
+      <scope>test</scope>
+    </dependency>
+ 
+    <dependency>
+      <groupId>javax.servlet</groupId>
+      <artifactId>javax.servlet-api</artifactId>
+      <version>3.1.0</version>
+      <scope>provided</scope>
+    </dependency>
+ 
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.9.0</version>
+    </dependency>
+  </dependencies>
+ 
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.tomcat.maven</groupId>
+        <artifactId>tomcat7-maven-plugin</artifactId>
+        <version>2.1</version>
+        <configuration>
+          <port>80</port>
+          <path>/</path>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
+```
+
+**步骤 3: 创建项目包结构**
+
+![](<assets/1740015618803.png>)
+
+*   config 目录存放的是相关的配置类
+*   controller 编写的是 Controller 类
+*   dao 存放的是 Dao 接口，因为使用的是 Mapper 接口代理方式，所以没有实现类包
+*   service 存的是 Service 接口，impl 存放的是 Service 实现类
+*   resources: 存入的是配置文件，如 Jdbc.properties
+*   webapp: 目录可以存放静态资源
+*   test/java: 存放的是测试类
+
+**步骤 4: 创建 SpringConfig 配置类**
+
+```
+@Configuration
+@ComponentScan({"com.itheima.service"})
+//加载properties，别忘了classpath:
+@PropertySource("classpath:jdbc.properties")
+//导入Mybatis配置类
+@Import({JdbcConfig.class,MyBatisConfig.class})
+//启用业务
+@EnableTransactionManagement
+public class SpringConfig {
+}
+```
+
+**步骤 5: 创建 JdbcConfig 配置类**
+
+```
+public class JdbcConfig {
+    @Value("${jdbc.driver}")
+    private String driver;
+    @Value("${jdbc.url}")
+    private String url;
+    @Value("${jdbc.username}")
+    private String username;
+    @Value("${jdbc.password}")
+    private String password;
+ 
+    @Bean
+    public DataSource dataSource(){
+        DruidDataSource dataSource = new DruidDataSource();
+        dataSource.setDriverClassName(driver);
+        dataSource.setUrl(url);
+        dataSource.setUsername(username);
+        dataSource.setPassword(password);
+        return dataSource;
+    }
+ 
+    //平台事务管理器
+    @Bean
+    public PlatformTransactionManager transactionManager(DataSource dataSource){
+        DataSourceTransactionManager ds = new DataSourceTransactionManager();
+        ds.setDataSource(dataSource);
+        return ds;
+    }
+}
+```
+
+**步骤 6: 创建 MybatisConfig 配置类**
+
+```
+public class MyBatisConfig {
+    //MyBatisConfig 配置类需要两个bean被IOC容器管理，SqlSessionFactoryBean可以自动获得SqlSessionFactory，MapperScannerConfigurer扫描mapper所在的包
+    @Bean
+    public SqlSessionFactoryBean sqlSessionFactory(DataSource dataSource){
+        SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
+        factoryBean.setDataSource(dataSource);
+        factoryBean.setTypeAliasesPackage("com.itheima.domain");
+        return factoryBean;
+    }
+    //Mapper扫描配置器MapperScannerConfigurer 
+    @Bean
+    public MapperScannerConfigurer mapperScannerConfigurer(){
+        MapperScannerConfigurer msc = new MapperScannerConfigurer();
+        msc.setBasePackage("com.itheima.dao");
+        return msc;
+    }
+}
+```
+
+**步骤 7: 创建 jdbc.properties**
+
+在 resources 下提供 jdbc.properties, 设置数据库连接四要素
+
+```
+jdbc.driver=com.mysql.jdbc.Driver
+jdbc.url=jdbc:mysql://localhost:3306/ssm_db
+jdbc.username=root
+jdbc.password=root
+```
+
+**步骤 8: 创建 SpringMVC 配置类**
+
+```
+@Configuration
+@ComponentScan("com.itheima.controller")
+@EnableWebMvc
+public class SpringMvcConfig {
+}
+```
+
+**步骤 9: 创建 Servlet 配置类**
+
+```
+public class ServletConfig extends AbstractAnnotationConfigDispatcherServletInitializer {
+    //加载Spring配置类
+    protected Class<?>[] getRootConfigClasses() {
+        return new Class[]{SpringConfig.class};
+    }
+    //加载SpringMVC配置类
+    protected Class<?>[] getServletConfigClasses() {
+        return new Class[]{SpringMvcConfig.class};
+    }
+    //设置SpringMVC请求地址拦截规则
+    protected String[] getServletMappings() {
+        return new String[]{"/"};
+    }
+    //设置post请求中文乱码过滤器
+    @Override
+    protected Filter[] getServletFilters() {
+        CharacterEncodingFilter filter = new CharacterEncodingFilter();
+        filter.setEncoding("utf-8");
+        return new Filter[]{filter};
+    }
+}
+```
+
+至此 SSM 整合的环境就已经搭建好了。
+
+### 1.3 代码实现
+
+需求: 对表 tbl_book 进行新增、修改、删除、根据 ID 查询和查询所有
+
+**步骤 1: 创建数据库及表**
+
+```
+create database ssm_db character set utf8;
+use ssm_db;
+create table tbl_book(
+  id int primary key auto_increment,
+  type varchar(20),
+  name varchar(50),
+  description varchar(255)
+)
+ 
+insert  into `tbl_book`(`id`,`type`,`name`,`description`) values (1,'计算机理论','Spring实战 第五版','Spring入门经典教程，深入理解Spring原理技术内幕'),(2,'计算机理论','Spring 5核心原理与30个类手写实践','十年沉淀之作，手写Spring精华思想'),(3,'计算机理论','Spring 5设计模式','深入Spring源码刨析Spring源码中蕴含的10大设计模式'),(4,'计算机理论','Spring MVC+Mybatis开发从入门到项目实战','全方位解析面向Web应用的轻量级框架，带你成为Spring MVC开发高手'),(5,'计算机理论','轻量级Java Web企业应用实战','源码级刨析Spring框架，适合已掌握Java基础的读者'),(6,'计算机理论','Java核心技术 卷Ⅰ 基础知识(原书第11版)','Core Java第11版，Jolt大奖获奖作品，针对Java SE9、10、11全面更新'),(7,'计算机理论','深入理解Java虚拟机','5个纬度全面刨析JVM,大厂面试知识点全覆盖'),(8,'计算机理论','Java编程思想(第4版)','Java学习必读经典，殿堂级著作！赢得了全球程序员的广泛赞誉'),(9,'计算机理论','零基础学Java(全彩版)','零基础自学编程的入门图书，由浅入深，详解Java语言的编程思想和核心技术'),(10,'市场营销','直播就这么做:主播高效沟通实战指南','张三李四王五成长为网红的秘密都在书中'),(11,'市场营销','直播销讲实战一本通','和小明一起学系列网络营销书籍'),(12,'市场营销','直播带货:淘宝、天猫直播从新手到高手','一本教你如何玩转直播的书，10堂课轻松实现带货月入3W+');
+```
+
+**步骤 2: 编写 Book 模型类**
+
+```
+public class Book {
+    private Integer id;
+    private String type;
+    private String name;
+    private String description;
+    //getter...setter...toString省略
+}
+```
+
+**步骤 3: 编写 Dao 接口**
+
+```
+@Repository
+public interface BookDao {
+ 
+//    @Insert("insert into tbl_book values(null,#{type},#{name},#{description})")
+    @Insert("insert into tbl_book (type,name,description) values(#{type},#{name},#{description})")
+    public void save(Book book);
+ 
+    @Update("update tbl_book set type = #{type}, name = #{name}, description = #{description} where id = #{id}")
+    public void update(Book book);
+ 
+    @Delete("delete from tbl_book where id = #{id}")
+    public void delete(Integer id);
+ 
+    @Select("select * from tbl_book where id = #{id}")
+    public Book getById(Integer id);
+ 
+    @Select("select * from tbl_book")
+    public List<Book> getAll();
+}
+```
+
+**步骤 4: 编写 Service 接口和实现类**
+
+```
+//业务注解，搭配SpringConfig的@EnableTransactionManagement和JdbcConfig里的PlatformTransactionManager的bean对象
+@Transactional
+public interface BookService {
+    /**
+     * 保存
+     * @param book
+     * @return
+     */
+    public boolean save(Book book);
+ 
+    /**
+     * 修改
+     * @param book
+     * @return
+     */
+    public boolean update(Book book);
+ 
+    /**
+     * 按id删除
+     * @param id
+     * @return
+     */
+    public boolean delete(Integer id);
+ 
+    /**
+     * 按id查询
+     * @param id
+     * @return
+     */
+    public Book getById(Integer id);
+ 
+    /**
+     * 查询全部
+     * @return
+     */
+    public List<Book> getAll();
+}
+```
+
+```
+@Service
+public class BookServiceImpl implements BookService {
+    @Autowired
+    private BookDao bookDao;
+ 
+    public boolean save(Book book) {
+        bookDao.save(book);
+        return true;
+    }
+ 
+    public boolean update(Book book) {
+        bookDao.update(book);
+        return true;
+    }
+ 
+    public boolean delete(Integer id) {
+        bookDao.delete(id);
+        return true;
+    }
+ 
+    public Book getById(Integer id) {
+        return bookDao.getById(id);
+    }
+ 
+    public List<Book> getAll() {
+        return bookDao.getAll();
+    }
+}
+```
+
+**自动注入 bookDao** **黄线提示问题：**
+
+*   **自动注入 bookDao** 在 Service 中注入的会提示一个**黄线提示**，为什么呢?
+    
+    ![](<assets/1740015620041.png>)
+    
+     **答案：因为接口不能创建对象。**
+    
+    *   BookDao 是一个接口，没有实现类，**接口是不能创建对象的**，所以最终注入的应该是代理对象
+    *   代理对象是由 Spring 的 IOC 容器来创建管理的
+    *   IOC 容器又是在 Web 服务器启动的时候才会创建
+    *   **IDEA 在检测依赖关系**的时候，**没有找到适合的类注入**，所以会提示错误提示
+    *   但是程序运行的时候，代理对象就会被创建，框架会使用 DI 进行注入，所以程序运行无影响。
+*   **如何解决上述问题?**
+    
+    *   可以不用理会，因为运行是正常的
+        
+    *   设置错误提示级别
+        
+        ![](<assets/1740015621799.png>)
+        
+
+**步骤 5: 编写 Contorller 类**
+
+```
+@RestController
+@RequestMapping("/books")
+public class BookController {
+ 
+    @Autowired
+    private BookService bookService;
+ 
+    @PostMapping
+    public boolean save(@RequestBody Book book) {
+        return bookService.save(book);
+    }
+ 
+    @PutMapping
+    public boolean update(@RequestBody Book book) {
+        return bookService.update(book);
+    }
+ 
+    @DeleteMapping("/{id}")
+    public boolean delete(@PathVariable Integer id) {
+        return bookService.delete(id);
+    }
+ 
+    @GetMapping("/{id}")
+    public Book getById(@PathVariable Integer id) {
+        return bookService.getById(id);
+    }
+ 
+    @GetMapping
+    public List<Book> getAll() {
+        return bookService.getAll();
+    }
+}
+```
+
+对于图书模块的增删改查就已经完成了编写，我们可以从后往前写也可以从前往后写，最终只需要能把功能实现即可。
+
+接下来我们就先把业务层的代码使用`Spring整合Junit`的知识点进行单元测试:
+
+### 1.4 单元测试
+
+**步骤 1: 新建测试类**
+
+```
+@RunWith(SpringJUnit4ClassRunner.class)
+@ContextConfiguration(classes = SpringConfig.class)
+public class BookServiceTest {
+ 
+}
+```
+
+**步骤 2: 注入 Service 类**
+
+```
+@RunWith(SpringJUnit4ClassRunner.class)
+@ContextConfiguration(classes = SpringConfig.class)
+public class BookServiceTest {
+ 
+    @Autowired
+    private BookService bookService;
+ 
+ 
+}
+```
+
+**步骤 3: 编写测试方法**
+
+我们先来对查询进行单元测试。
+
+```
+@RunWith(SpringJUnit4ClassRunner.class)
+@ContextConfiguration(classes = SpringConfig.class)
+public class BookServiceTest {
+ 
+    @Autowired
+    private BookService bookService;
+ 
+    @Test
+    public void testGetById(){
+        Book book = bookService.getById(1);
+        System.out.println(book);
+    }
+ 
+    @Test
+    public void testGetAll(){
+        List<Book> all = bookService.getAll();
+        System.out.println(all);
+    }
+ 
+}
+```
+
+根据 ID 查询，测试的结果为:
+
+![](<assets/1740015623691.png>)
+
+查询所有，测试的结果为:
+
+![](<assets/1740015625812.png>)
+
+### 1.5 PostMan 测试表现层方法
+
+**新增**
+
+`http://localhost/books`
+
+```
+{
+    "type":"类别测试数据",
+    "name":"书名测试数据",
+    "description":"描述测试数据"
+}
+```
+
+![](<assets/1740015628006.png>)
+
+**修改**
+
+```
+http://localhost/books
+
+```
+
+```
+{
+    "id":13,
+    "type":"类别测试数据",
+    "name":"书名测试数据",
+    "description":"描述测试数据"
+}
+```
+
+![](<assets/1740015629156.png>)
+
+**删除**
+
+```
+http://localhost/books/14
+
+```
+
+![](<assets/1740015629405.png>)
+
+**查询单个**
+
+```
+http://localhost/books/1
+
+```
+
+![](<assets/1740015629648.png>)
+
+**查询所有**
+
+```
+http://localhost/books
+
+```
+
+![](<assets/1740015629978.png>)
+
+## 2，统一结果封装，前后端数据传输协议
+
+### 2.1 概述
+
+SSM 整合以及功能模块开发完成后，接下来，我们在上述案例的基础上**分析下有哪些问题需要我们去解决**下。
+
+**返回值问题:**
+
+**希望后台返回统一的数据结果，前端按照一种方式解析**
+
+**问题分析：** 
+
+*   在 Controller 层增删改返回给前端的是 boolean 类型数据
+    
+    ![](<assets/1740015630310.png>)
+    
+*   在 Controller 层查询单个返回给前端的是对象
+    
+    ![](<assets/1740015630596.png>)
+    
+*   在 Controller 层查询所有返回给前端的是集合对象
+    
+    ![](<assets/1740015630803.png>)
+    
+
+目前我们就已经有三种数据类型返回给前端，如果随着业务的增长，我们需要返回的数据类型会越来越多。对于前端开发人员在解析数据的时候就比较凌乱了，所以对于前端来说：
+
+如果后台能够返回一个统一的数据结果，前端在解析的时候就可以按照一种方式进行解析。开发就会变得更加简单。
+
+**答案: 创建结果模型类**
+
+*   **data：**封装返回的**数据**
+*   **code：**封装**返回状态码（操作结果），**即**何种操作及是否操作成功**。
+*   **msg：封装特殊消息**，如操作失败后为了封装返回的**错误信息**
+
+![](<assets/1740015630990.png>)
+
+根据分析，我们可以设置统一数据返回结果类
+
+```
+public class Result{
+    //返回数据
+    private Object data;
+    //操作结果
+    private Integer code;
+    //特殊信息
+    private String msg;
+}
+```
+
+**注意:**Result 类名及类中的字段并不是固定的，可以根据需要自行增减提供若干个构造方法，方便操作。
+
+### 2.2 代码实现
+
+前面我们已经分析了如何封装返回结果数据，具体在项目中该如何实现，我们通过个例子来操作一把
+
+#### 2.2.1 环境准备
+
+*   创建一个 Web 的 Maven 项目
+*   pom.xml 添加 SSM 整合所需 jar 包
+*   创建对应的配置类
+*   编写 Controller、Service 接口、Service 实现类、Dao 接口和模型类
+*   resources 下提供 jdbc.properties 配置文件
+
+因为这个项目环境的内容**和 SSM 整合的内容是一致**的，可以在前面整合的例子案例环境下，进行本节内容的开发。
+
+最终创建好的项目结构如下:
+
+![](<assets/1740015631387.png>)
+
+#### 2.2.2 结果封装
+
+对于结果封装，我们应该是**在表现层进行处理**，所以我们把 **Result 类和 Code 类放在 controller 包下**，当然你**也可以放在 domain 包**，这个都是可以的，具体如何实现结果封装，具体的步骤为:
+
+**步骤 1: 创建 Result 类**
+
+构造方法一般**先返回码再数据**，具体可以根据需求加，具体看实际需求和公司要求。 
+
+**注意：**一定要加 get 和 set 方法，否则会报错：**No converter found for return value of type** 
+
+```
+public class Result {
+    //描述统一格式中的数据
+    private Object data;
+    //描述统一格式中的编码，用于区分操作，可以简化配置0或1表示成功失败
+    private Integer code;
+ 
+    public Object getData() {
+        return data;
+    }
+ 
+    public void setData(Object data) {
+        this.data = data;
+    }
+ 
+    public Integer getCode() {
+        return code;
+    }
+ 
+    public void setCode(Integer code) {
+        this.code = code;
+    }
+ 
+    public String getMsg() {
+        return msg;
+    }
+ 
+    public void setMsg(String msg) {
+        this.msg = msg;
+    }
+ 
+    //描述统一格式中的消息，可选属性
+    private String msg;
+ 
+    public Result() {
+    }
+    //构造方法是方便对象的创建
+    public Result(Integer code,Object data) {
+        this.data = data;
+        this.code = code;
+    }
+    //构造方法是方便对象的创建
+    public Result(Integer code, Object data, String msg) {
+        this.data = data;
+        this.code = code;
+        this.msg = msg;
+    }
+    //setter...getter...省略
+}
+```
+
+**步骤 2: 定义返回状态码 Code 类**
+
+```
+//返回状态码，1结尾是成功，0结尾是失败
+public class Code {
+    public static final Integer SAVE_OK = 20011;
+    public static final Integer DELETE_OK = 20021;
+    public static final Integer UPDATE_OK = 20031;
+    public static final Integer GET_OK = 20041;
+ 
+    public static final Integer SAVE_ERR = 20010;
+    public static final Integer DELETE_ERR = 20020;
+    public static final Integer UPDATE_ERR = 20030;
+    public static final Integer GET_ERR = 20040;
+}
+```
+
+**注意:**code 类中的常量设计也不是固定的，可以根据需要自行增减，例如将查询再进行细分为 GET_OK,GET_ALL_OK,GET_PAGE_OK 等。
+
+**步骤 3: 修改 Controller 类的返回值**
+
+```
+//统一每一个控制器方法返回值
+@RestController
+@RequestMapping("/books")
+public class BookController {
+ 
+    @Autowired
+    private BookService bookService;
+ 
+    @PostMapping
+    public Result save(@RequestBody Book book) {
+        boolean flag = bookService.save(book);
+        return new Result(flag ? Code.SAVE_OK:Code.SAVE_ERR,flag);
+    }
+ 
+    @PutMapping
+    public Result update(@RequestBody Book book) {
+        boolean flag = bookService.update(book);
+        return new Result(flag ? Code.UPDATE_OK:Code.UPDATE_ERR,flag);
+    }
+ 
+    @DeleteMapping("/{id}")
+    public Result delete(@PathVariable Integer id) {
+        boolean flag = bookService.delete(id);
+        return new Result(flag ? Code.DELETE_OK:Code.DELETE_ERR,flag);
+    }
+ 
+    @GetMapping("/{id}")
+    public Result getById(@PathVariable Integer id) {
+        Book book = bookService.getById(id);
+        Integer code = book != null ? Code.GET_OK : Code.GET_ERR;
+        String msg = book != null ? "" : "数据查询失败，请重试！";
+        return new Result(code,book,msg);
+    }
+ 
+    @GetMapping
+    public Result getAll() {
+        List<Book> bookList = bookService.getAll();
+        Integer code = bookList != null ? Code.GET_OK : Code.GET_ERR;
+        String msg = bookList != null ? "" : "数据查询失败，请重试！";
+        return new Result(code,bookList,msg);
+    }
+}
+```
+
+**步骤 4: 启动服务测试**
+
+![](<assets/1740015631565.png>)
+
+至此，我们的返回结果就已经能以一种统一的格式返回给前端。
+
+**前端**根据返回的结果，先从中获取`code`, **根据 code 判断成功或失败**，如果成功则取`data`属性的值，如果失败，则取`msg`中的值做提示。
+
+如果报错 **No converter found for return value of type**，原因是 Result 类没有加 get 和 set 方法。
+
+### 2.3 标准结果类代码
+
+```
+//以前是把data设为Object类型，现在用泛型格式，都能实现。
+@Data
+public class R<T> {
+ 
+    private Integer code; //编码：1成功，0和其它数字为失败
+ 
+    private String msg; //错误信息
+ 
+    private T data; //数据
+ 
+    private Map map = new HashMap(); //动态数据
+    //静态类，controller返回时直接return R.success(T);
+    public static <T> R<T> success(T object) {
+        R<T> r = new R<T>();
+        r.data = object;
+        r.code = 1;
+        return r;
+    }
+ 
+    public static <T> R<T> error(String msg) {
+        R r = new R();
+        r.msg = msg;
+        r.code = 0;
+        return r;
+    }
+    //添加动态数据
+    public R<T> add(String key, Object value) {
+        this.map.put(key, value);
+        return this;
+    }
+}
+```
+
+## 3，统一异常处理
+
+### 3.1 问题描述
+
+**演示异常**：
+
+修改 BookController 类的`getById`方法
+
+```
+@GetMapping("/{id}")
+public Result getById(@PathVariable Integer id) {
+    //手动添加一个错误信息
+    if(id==1){
+        int i = 1/0;
+    }
+    Book book = bookService.getById(id);
+    Integer code = book != null ? Code.GET_OK : Code.GET_ERR;
+    String msg = book != null ? "" : "数据查询失败，请重试！";
+    return new Result(code,book,msg);
+}
+```
+
+重新启动运行项目，使用 PostMan 发送请求，当传入的 id 为 1，则会**报错：**
+
+![](<assets/1740015631821.png>)
+
+前端接收到这个信息后和之前我们约定的格式不一致，这个问题该如何解决?
+
+在解决问题之前，我们先来看下异常的种类及出现异常的原因:
+
+*   框架内部抛出的异常：因使用不合规导致
+*   数据层抛出的异常：因外部服务器故障导致（例如：服务器访问超时）
+*   业务层抛出的异常：因业务逻辑书写错误导致（例如：遍历业务书写操作，导致索引异常等）
+*   表现层抛出的异常：因数据收集、校验等规则导致（例如：不匹配的数据类型间导致异常）
+*   工具类抛出的异常：因工具类书写不严谨不够健壮导致（例如：必要释放的连接长期未释放等）
+
+看完上面这些出现异常的位置，你会发现，在我们开发的任何一个位置都有可能出现异常，而且这些异常是不能避免的。所以我们就得将异常进行处理。
+
+**思考**
+
+1.  各个层级均出现异常，**异常处理代码书写在哪一层?**
+    
+    **所有的异常均抛出到表现层进行处理**
+    
+2.  异常的种类很多，**表现层如何将所有的异常都处理到**呢?
+    
+    **异常分类**
+    
+3.  表现层处理异常，每个方法中单独书写，代码**书写量巨大**且意义不强，如何解决?
+    
+    **AOP**
+    
+
+**解决方案：** 
+
+对于上面这些问题及解决方案，SpringMVC 已经为我们提供了一套解决方案:
+
+*   **异常处理器:**
+    
+    *   集中的、统一的处理项目中出现的异常。
+        
+        ![](<assets/1740015632016.png>)
+        
+
+### 3.2 异常处理器的使用
+
+#### 3.2.1 环境准备
+
+*   创建一个 Web 的 Maven 项目
+*   pom.xml 添加 SSM 整合所需 jar 包
+*   创建对应的配置类
+*   编写 Controller、Service 接口、Service 实现类、Dao 接口和模型类
+*   resources 下提供 jdbc.properties 配置文件
+
+内容参考前面的项目或者直接使用前面的项目进行本节内容的学习。
+
+最终创建好的项目结构如下:
+
+![](<assets/1740015632211.png>)
+
+#### 3.2.2 代码实现
+
+**步骤 1: 创建异常处理器类**
+
+```
+//@RestControllerAdvice用于标识当前类为REST风格对应的异常处理器，Advise译为通知，建议
+@RestControllerAdvice
+public class ProjectExceptionAdvice {
+    //除了自定义的异常处理器，保留对Exception类型的异常处理，用于处理非预期的异常
+    //@ExceptionHandler异常处理器
+    @ExceptionHandler(Exception.class)
+    public Result doException(Exception ex){
+          System.out.println("嘿嘿,异常你哪里跑！")
+        return new Result(666,null,"嘿嘿,异常你哪里跑！");
+    }
+}
+```
+
+**确保 SpringMvcConfig 能够扫描到异常处理器类**
+
+**步骤 2: 让程序抛出异常**
+
+修改`BookController`的 getById 方法，添加`int i = 1/0`.
+
+```
+@GetMapping("/{id}")
+public Result getById(@PathVariable Integer id) {
+      int i = 1/0;
+    Book book = bookService.getById(id);
+    Integer code = book != null ? Code.GET_OK : Code.GET_ERR;
+    String msg = book != null ? "" : "数据查询失败，请重试！";
+    return new Result(code,book,msg);
+}
+```
+
+**步骤 3: 运行程序，测试异常拦截**
+
+![](<assets/1740015632465.png>)
+
+![](<assets/1740015632748.png>)
+
+至此，就算后台执行的过程中抛出异常，最终也能按照我们和前端约定好的格式返回给前端。
+
+#### 知识点 @RestControllerAdvice@ExceptionHandler
+
+**知识点 1：@RestControllerAdvice**
+
+<table><thead><tr><th>名称</th><th>@RestControllerAdvice</th></tr></thead><tbody><tr><td>类型</td><td><strong>类注解</strong></td></tr><tr><td>位置</td><td>Rest 风格开发的控制器增强类定义上方</td></tr><tr><td>作用</td><td>为 Rest 风格开发的控制器类做增强</td></tr></tbody></table>
+
+**说明:** 此注解自带 @ResponseBody 注解与 @Component 注解，具备对应的功能
+
+![](<assets/1740015633031.png>)
+
+**知识点 2：@ExceptionHandler**
+
+<table><thead><tr><th>名称</th><th>@ExceptionHandler</th></tr></thead><tbody><tr><td>类型</td><td><strong>方法注解</strong></td></tr><tr><td>位置</td><td>专用于异常处理的控制器方法上方</td></tr><tr><td>作用</td><td>设置指定异常的处理方案，功能等同于控制器方法，<br>出现异常后终止原始控制器执行, 并转入当前方法执行</td></tr></tbody></table>
+
+**说明：**此类方法可以根据处理的异常不同，制作多个方法分别处理对应的异常
+
+### 3.3 项目异常处理方案
+
+#### 3.3.1 异常分类
+
+因为异常的种类有很多，如果每一个异常都对应一个 @ExceptionHandler，那得写多少个方法来处理各自的异常，所以我们在处理异常之前，需要**对异常进行分类:**
+
+*   **业务异常（BusinessException）是用户问题：**
+    
+    *   **规范的用户行为**产生的异常
+        
+        *   用户在页面输入内容的时候未按照指定格式进行数据填写，如在年龄框输入的是字符串
+            
+            ![](<assets/1740015633191.png>)
+            
+    *   **不规范的用户行为**操作产生的异常
+        
+        *   如用户故意传递错误数据
+            
+            ![](<assets/1740015633384.png>)
+            
+*   **系统异常（SystemException）是系统问题：**
+    
+    *   项目运行过程中可预计但**无法避免的异常**
+        *   比如**数据库或服务器宕机**
+*   **其他异常（Exception）是程序员问题：**
+    
+    *   **编程人员未预期到的异常**，如: 用到的文件不存在
+        
+        ![](<assets/1740015633619.png>)
+        
+
+将异常分类以后，针对不同类型的异常，要提供具体的解决方案:
+
+#### 3.3.2 异常解决方案
+
+*   **业务异常（BusinessException）**
+    *   **发送对应消息传递给用户**，提醒规范操作
+        *   举例：大家常见的就是提示用户名已存在或密码格式不正确等
+*   **系统异常（SystemException）**
+    *   **发送固定消息传递给用户**，安抚用户
+        *   **系统繁忙**，请稍后再试
+        *   系统正在维护升级，请稍后再试
+        *   系统出问题，请联系系统管理员等
+    *   **发送特定消息给运维人员**，提醒维护
+        *   举例：可以发送短信、邮箱或者是公司内部通信软件
+    *   **记录日志**
+        *   发消息和记录日志对用户来说是不可见的，属于后台程序
+*   **其他异常（Exception）**
+    *   **发送固定消息传递给用户**，安抚用户
+    *   发送特定消息给**编程人员**，提醒维护（纳入预期范围内）
+        *   一般是程序没有考虑全，比如未做非空校验等
+    *   **记录日志**
+
+![](<assets/1740015633902.png>)
+
+#### 3.3.3 异常解决方案的具体实现
+
+**思路:**
+
+1. 先通过自定义异常，完成 BusinessException 和 SystemException 的定义
+
+2. 将其他异常包装成自定义异常类型
+
+3. 在异常处理器类中对不同的异常进行处理
+
+**实际运行：**
+
+1.  controller 中出现异常，手动带着错误码和错误信息抛出自定义的系统、业务异常对象；
+2.  controller 的项目异常通知类拦截到了异常，不同方法处理不同异常，返回异常的 code 和 messageResult 对象给前端。
+
+创建一个 exception 包，包下定义三种项目异常的类。  
+
+**步骤 1: 定义系统异常类、业务异常类这两个自定义异常类**
+
+继承 Runtime 异常，定义 code 成员变量，生成 getter 和 setter 方法、构造方法。
+
+```
+//自定义系统异常处理器，继承运行时异常RuntimeException，用于封装异常信息，对异常进行分类
+public class SystemException extends RuntimeException{
+    private Integer code;
+ 
+    public Integer getCode() {
+        return code;
+    }
+ 
+    public void setCode(Integer code) {
+        this.code = code;
+    }
+ 
+    public SystemException(Integer code, String message) {
+        super(message);
+        this.code = code;
+    }
+ 
+    public SystemException(Integer code, String message, Throwable cause) {
+        super(message, cause);
+        this.code = code;
+    }
+ 
+}
+ 
+//自定义业务异常处理器，用于封装异常信息，对异常进行分类
+public class BusinessException extends RuntimeException{
+    private Integer code;
+ 
+    public Integer getCode() {
+        return code;
+    }
+ 
+    public void setCode(Integer code) {
+        this.code = code;
+    }
+ 
+    public BusinessException(Integer code, String message) {
+        super(message);
+        this.code = code;
+    }
+ 
+    public BusinessException(Integer code, String message, Throwable cause) {
+        super(message, cause);
+        this.code = code;
+    }
+ 
+}
+```
+
+**说明:**
+
+*   让自定义异常类**继承`RuntimeException`**的好处是，后期在抛出这两个异常的时候，就**不用在 try...catch... 或 throws** 了
+*   自定义异常类中添加`code`属性的原因是为了更好的区分异常是来自哪个业务的
+
+**步骤 2: 模拟系统异常、业务异常**
+
+假如在 BookServiceImpl 的 getById 方法抛异常了，该如何来包装呢?
+
+```
+public Book getById(Integer id) {
+    //模拟业务异常，包装成自定义异常
+    if(id == 1){
+        throw new BusinessException(Code.BUSINESS_ERR,"请不要使用你的技术挑战我的耐性!");
+    }
+    //模拟系统异常，将可能出现的异常进行包装，转换成自定义异常
+    try{
+        int i = 1/0;
+    }catch (Exception e){
+        throw new SystemException(Code.SYSTEM_TIMEOUT_ERR,"服务器访问超时，请重试!",e);
+    }
+    return bookDao.getById(id);
+}
+```
+
+具体的包装方式有：
+
+*   方式一:`try{}catch(){}`在 catch 中重新 throw 我们自定义异常即可。
+*   方式二: 直接 throw 自定义异常即可
+
+上面为了使`code`看着更专业些，我们在 Code 类中再新增需要的属性
+
+```
+//状态码
+public class Code {
+    public static final Integer SAVE_OK = 20011;
+    public static final Integer DELETE_OK = 20021;
+    public static final Integer UPDATE_OK = 20031;
+    public static final Integer GET_OK = 20041;
+ 
+    public static final Integer SAVE_ERR = 20010;
+    public static final Integer DELETE_ERR = 20020;
+    public static final Integer UPDATE_ERR = 20030;
+    public static final Integer GET_ERR = 20040;
+    public static final Integer SYSTEM_ERR = 50001;
+    public static final Integer SYSTEM_TIMEOUT_ERR = 50002;
+    public static final Integer SYSTEM_UNKNOWN_ERR = 59999;
+ 
+    public static final Integer BUSINESS_ERR = 60002;
+}
+```
+
+**步骤 3: 处理器类中处理自定义异常**
+
+```
+//@RestControllerAdvice用于标识当前类为REST风格对应的异常处理器
+@RestControllerAdvice
+public class ProjectExceptionAdvice {
+    //@ExceptionHandler用于设置当前处理器类对应的异常类型
+    @ExceptionHandler(SystemException.class)
+    public Result doSystemException(SystemException ex){
+        //记录日志
+        //发送消息给运维
+        //发送邮件给开发人员,ex对象发送给开发人员
+        return new Result(ex.getCode(),null,ex.getMessage());
+    }
+ 
+    @ExceptionHandler(BusinessException.class)
+    public Result doBusinessException(BusinessException ex){
+        return new Result(ex.getCode(),null,ex.getMessage());
+    }
+ 
+    //除了自定义的异常处理器，保留对Exception类型的异常处理，用于处理非预期的异常
+    @ExceptionHandler(Exception.class)
+    public Result doOtherException(Exception ex){
+        //记录日志
+        //发送消息给运维
+        //发送邮件给开发人员,ex对象发送给开发人员
+        return new Result(Code.SYSTEM_UNKNOW_ERR,null,"系统繁忙，请稍后再试！");
+    }
+}
+```
+
+**步骤 4: 运行程序**
+
+根据 ID 查询，
+
+如果传入的参数为 1，会报**`BusinessException`**
+
+![](<assets/1740015634203.png>)
+
+如果传入的是其他参数，会报**`SystemException`**
+
+![](<assets/1740015634454.png>)
+
+对于异常我们就已经处理完成了，不管后台哪一层抛出异常，都会以我们与前端约定好的方式进行返回，前端只需要把信息获取到，根据返回的正确与否来展示不同的内容即可。
+
+**小结**
+
+以后项目中的异常处理方式为:
+
+![](<assets/1740015634702.png>)
+
+## 4，前后台协议联调
+
+### 4.0 坑点总结
+
+1.  axios.then().finally(()=>{这里写查询列表或者关闭窗口之类的代码})
+2.  then 里不仅要通过 res.data.code 判断成功失败，还要 else 里弹框 res.data.msg。因为 code 里只有程序员预见的错误（在项目异常通知类 ProjectExceptionAdvice 里设置的业务异常和系统异常的拦截），可能还存在没有预见的错误需要输出。
+    
+    ```
+    axios.delete("/books/"+row.id,row.id).then((res)=>{
+        if(res.data.code==20021){
+            this.$message.success("删除成功");
+        }else if(res.data.code==20021){
+            this.$message.error("删除失败");
+        }else {
+            this.$message.error(res.data.msg);
+        }
+    }).finally(()=>{
+        this.getAll();
+    })
+    ```
+    
+    ```
+    @RestControllerAdvice
+    public class ProjectExceptionAdvice {
+        @ExceptionHandler(SystemException.class)
+        public Result doSystemException(SystemException systemException){
+            System.out.println("系统异常"+systemException);
+            return new Result(systemException.getCode(),null,systemException.getMessage());
+        }
+        @ExceptionHandler(BusinessException.class)
+        public Result doBusinessException(BusinessException businessException){
+            System.out.println("业务异常"+businessException);
+            return new Result(businessException.getCode(),null,businessException.getMessage());
+        }
+        @ExceptionHandler(Exception.class)
+        public Result doException(Exception exception){
+            System.out.println(exception);
+            return new Result(666,null,"网络异常");
+        }
+    }
+    ```
+    
+    比如 axios 里忘了加路径，报错，弹窗网络异常。
+    
+    ![](<assets/1740015634794.png>)
+    
+
+### 4.1 环境准备
+
+*   创建一个 Web 的 Maven 项目
+*   pom.xml 添加 SSM 整合所需 jar 包
+*   创建对应的配置类
+*   编写 Controller、Service 接口、Service 实现类、Dao 接口和模型类
+*   resources 下提供 jdbc.properties 配置文件
+
+**内容参考前面的项目**或者直接使用前面的项目进行本节内容的学习。
+
+最终创建好的项目结构如下:
+
+![](<assets/1740015634998.png>)
+
+将`资料\SSM功能页面`下面的静态资源拷贝到 webapp 下。
+
+![](<assets/1740015635403.png>)
+
+1.  因为添加了静态资源，SpringMVC 会拦截，所有需要在 SpringConfig 的配置类中将静态资源进行放行。
+    
+2.  新建 SpringMvcSupport
+    
+    ```
+    @Configuration
+    public class SpringMvcSupport extends WebMvcConfigurationSupport {
+        @Override
+        protected void addResourceHandlers(ResourceHandlerRegistry registry) {
+            registry.addResourceHandler("/pages/**").addResourceLocations("/pages/");
+            registry.addResourceHandler("/css/**").addResourceLocations("/css/");
+            registry.addResourceHandler("/js/**").addResourceLocations("/js/");
+            registry.addResourceHandler("/plugins/**").addResourceLocations("/plugins/");
+        }
+    }
+    ```
+    
+3.  在 SpringMvcConfig 中扫描 SpringMvcSupport
+    
+    ```
+    @Configuration
+    @ComponentScan({"com.itheima.controller","com.itheima.config"})
+    @EnableWebMvc
+    public class SpringMvcConfig {
+    }
+    ```
+    
+
+接下来我们就需要将所有的列表查询、新增、修改、删除等功能一个个来实现下。
+
+### 4.2 列表功能
+
+![](<assets/1740015635570.png>)
+
+需求: 页面加载完后发送异步请求到后台获取列表数据进行展示。
+
+1. 找到页面的钩子函数，`created()`
+
+2.`created()`方法中调用了`this.getAll()`方法
+
+3. 在 getAll() 方法中使用 axios 发送异步请求从后台获取数据
+
+4. 访问的路径为`http://localhost/books`
+
+5. 返回数据
+
+返回数据 res.data 的内容如下:
+
+```
+{
+    "data": [
+        {
+            "id": 1,
+            "type": "计算机理论",
+            "name": "Spring实战 第五版",
+            "description": "Spring入门经典教程，深入理解Spring原理技术内幕"
+        },
+        {
+            "id": 2,
+            "type": "计算机理论",
+            "name": "Spring 5核心原理与30个类手写实践",
+            "description": "十年沉淀之作，手写Spring精华思想"
+        },...
+    ],
+    "code": 20041,
+    "msg": ""
+}
+```
+
+发送方式:
+
+```
+getAll() {
+    //发送ajax请求
+    axios.get("/books").then((res)=>{
+        this.dataList = res.data.data;
+    });
+}
+```
+
+![](<assets/1740015635926.png>)
+
+### 4.3 添加功能
+
+![](<assets/1740015636214.png>)
+
+**需求:** 完成图片的新增功能模块
+
+1. 找到页面上的`新建`按钮，按钮上绑定了`@click="handleCreate()"`方法
+
+2. 在 method 中找到`handleCreate`方法，方法中打开新增面板
+
+3. 新增面板中找到`确定`按钮, 按钮上绑定了`@click="handleAdd()"`方法
+
+4. 在 method 中找到`handleAdd`方法
+
+5. 在方法中发送请求和数据，响应成功后将新增面板关闭并重新查询数据
+
+`handleCreate`打开新增面板
+
+```
+handleCreate() {
+    this.dialogFormVisible = true;
+},
+```
+
+`handleAdd`方法发送异步请求并携带数据
+
+```
+handleAdd () {
+    //发送ajax请求
+    //this.formData是表单中的数据，最后是一个json数据
+    axios.post("/books",this.formData).then((res)=>{
+        this.dialogFormVisible = false;
+        this.getAll();
+    });
+}
+```
+
+### 4.4 添加功能状态处理
+
+基础的新增功能已经完成，但是还有一些问题需要解决下:
+
+需求: 新增成功是关闭面板，重新查询数据，那么新增失败以后该如何处理?
+
+1. 在 handlerAdd 方法中根据后台返回的数据来进行不同的处理
+
+2. 如果后台返回的是成功，则提示成功信息，并关闭面板
+
+3. 如果后台返回的是失败，则提示错误信息
+
+**(1) 修改前端页面**
+
+![](<assets/1740015636397.png>)
+
+```
+handleAdd () {
+    //发送ajax请求
+    axios.post("/books",this.formData).then((res)=>{
+        //如果操作成功，关闭弹层，显示数据
+        if(res.data.code == 20011){    //SAVE_OK
+            this.dialogFormVisible = false;
+            this.$message.success("添加成功");   
+        }else if(res.data.code == 20010){    //SAVE_ERR
+            this.$message.error("添加失败");
+        }else{        //出现异常，返回异常的原因
+            this.$message.error(res.data.msg);
+        }
+    }).finally(()=>{
+        this.getAll();
+    });
+}
+```
+
+**(2) 后台返回操作结果**，将 **Dao 层**的增删改方法**返回值**从`void`改成**`int`**
+
+```
+public interface BookDao {
+ 
+//    @Insert("insert into tbl_book values(null,#{type},#{name},#{description})")
+    @Insert("insert into tbl_book (type,name,description) values(#{type},#{name},#{description})")
+    public int save(Book book);
+ 
+    @Update("update tbl_book set type = #{type}, name = #{name}, description = #{description} where id = #{id}")
+    public int update(Book book);
+ 
+    @Delete("delete from tbl_book where id = #{id}")
+    public int delete(Integer id);
+ 
+    @Select("select * from tbl_book where id = #{id}")
+    public Book getById(Integer id);
+ 
+    @Select("select * from tbl_book")
+    public List<Book> getAll();
+}
+```
+
+**(3) 在 BookServiceImpl 中，增删改方法根据 DAO 的返回值来决定返回 true/false**
+
+```
+@Service
+public class BookServiceImpl implements BookService {
+    @Autowired
+    private BookDao bookDao;
+ 
+    public boolean save(Book book) {
+        return bookDao.save(book) > 0;
+    }
+ 
+    public boolean update(Book book) {
+        return bookDao.update(book) > 0;
+    }
+ 
+    public boolean delete(Integer id) {
+        return bookDao.delete(id) > 0;
+    }
+ 
+    public Book getById(Integer id) {
+        if(id == 1){
+            throw new BusinessException(Code.BUSINESS_ERR,"请不要使用你的技术挑战我的耐性!");
+        }
+//        //将可能出现的异常进行包装，转换成自定义异常
+//        try{
+//            int i = 1/0;
+//        }catch (Exception e){
+//            throw new SystemException(Code.SYSTEM_TIMEOUT_ERR,"服务器访问超时，请重试!",e);
+//        }
+        return bookDao.getById(id);
+    }
+ 
+    public List<Book> getAll() {
+        return bookDao.getAll();
+    }
+}
+```
+
+**(4) 测试错误情况，将图书类别长度设置超出范围即可**
+
+![](<assets/1740015636757.png>)
+
+处理完新增后，会发现新增还存在一个问题，
+
+新增成功后，再次点击`新增`按钮会发现之前的数据还存在，这个时候就需要在新增的时候将表单内容清空。
+
+```
+resetForm(){
+    this.formData = {};
+}
+handleCreate() {
+    this.dialogFormVisible = true;
+    this.resetForm();
+}
+```
+
+### 4.5 修改功能
+
+![](<assets/1740015637065.png>)
+
+需求: 完成图书信息的修改功能
+
+1. 找到页面中的`编辑`按钮，该按钮绑定了`@click="handleUpdate(scope.row)"`
+
+2. 在 method 的`handleUpdate`方法中发送异步请求根据 ID 查询图书信息
+
+3. 根据后台返回的结果，判断是否查询成功
+
+​ 如果查询成功打开修改面板回显数据，如果失败提示错误信息
+
+4. 修改完成后找到修改面板的`确定`按钮，该按钮绑定了`@click="handleEdit()"`
+
+5. 在 method 的`handleEdit`方法中发送异步请求提交修改数据
+
+6. 根据后台返回的结果，判断是否修改成功
+
+​ 如果成功提示错误信息，关闭修改面板，重新查询数据，如果失败提示错误信息
+
+scope.row 代表的是当前行的行数据，也就是说, scope.row 就是选中行对应的 json 数据，如下:
+
+```
+{
+    "id": 1,
+    "type": "计算机理论",
+    "name": "Spring实战 第五版",
+    "description": "Spring入门经典教程，深入理解Spring原理技术内幕"
+}
+```
+
+**弹出编辑窗口和添加窗口的不同点是：**
+
+弹出编辑窗口要将单条数据展示到表单，弹出添加窗口是重置表单。
+
+**修改弹出编辑窗口`handleUpdate`方法**
+
+```
+//弹出编辑窗口
+handleUpdate(row) {
+    // console.log(row);   //row.id 查询条件
+    //查询数据，根据id查询
+    axios.get("/books/"+row.id).then((res)=>{
+        if(res.data.code == 20041){
+            //展示弹层，加载数据
+            this.formData = res.data.data;
+            this.dialogFormVisible4Edit = true;
+        }else{
+            this.$message.error(res.data.msg);
+        }
+    });
+}
+```
+
+**修改方法`handleEdit`**
+
+```
+handleEdit() {
+    //发送ajax请求
+    axios.put("/books",this.formData).then((res)=>{
+        //如果操作成功，关闭弹层，显示数据
+        if(res.data.code == 20031){
+            this.dialogFormVisible4Edit = false;
+            this.$message.success("修改成功");
+        }else if(res.data.code == 20030){
+            this.$message.error("修改失败");
+        }else{
+            this.$message.error(res.data.msg);
+        }
+    }).finally(()=>{
+        this.getAll();
+    });
+}
+```
+
+### 4.6 删除功能
+
+![](<assets/1740015637306.png>)
+
+**需求:** 完成页面的删除功能。
+
+1. 找到页面的删除按钮，按钮上绑定了`@click="handleDelete(scope.row)"`
+
+2.method 的`handleDelete`方法弹出提示框
+
+3. 用户点击取消, 提示操作已经被取消。
+
+4. 用户点击确定，发送异步请求并携带需要删除数据的主键 ID
+
+5. 根据后台返回结果做不同的操作
+
+​ 如果返回成功，提示成功信息，并重新查询数据
+
+​ 如果返回失败，提示错误信息，并重新查询数据
+
+**修改`handleDelete`方法**
+
+```
+handleDelete(row) {
+    //1.弹出提示框
+    this.$confirm("此操作永久删除当前数据，是否继续？","提示",{
+        type:'info'
+    }).then(()=>{
+        //2.做删除业务
+        axios.delete("/books/"+row.id).then((res)=>{
+            if(res.data.code == 20021){
+                this.$message.success("删除成功");
+            }else{
+                this.$message.error("删除失败");
+            }
+        }).finally(()=>{
+            this.getAll();
+        });
+    }).catch(()=>{
+        //3.取消删除
+        this.$message.info("取消删除操作");
+    });
+}
+```
+
+完整页面 book.html 页面
+
+```
+<!DOCTYPE html>
+ 
+<html>
+ 
+    <head>
+ 
+        <!-- 页面meta -->
+ 
+        <meta charset="utf-8">
+ 
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+ 
+        <title>SpringMVC案例</title>
+ 
+        <meta content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" name="viewport">
+ 
+        <!-- 引入样式 -->
+ 
+        <link rel="stylesheet" href="../plugins/elementui/index.css">
+ 
+        <link rel="stylesheet" href="../plugins/font-awesome/css/font-awesome.min.css">
+ 
+        <link rel="stylesheet" href="../css/style.css">
+ 
+    </head>
+ 
+    <body class="hold-transition">
+ 
+        <div id="app">
+ 
+            <div class="content-header">
+ 
+                <h1>图书管理</h1>
+ 
+            </div>
+ 
+            <div class="app-container">
+ 
+                <div class="box">
+ 
+                    <div class="filter-container">
+ 
+                        <el-input placeholder="图书名称" v-model="pagination.queryString" style="width: 200px;" class="filter-item"></el-input>
+ 
+                        <el-button @click="getAll()" class="dalfBut">查询</el-button>
+ 
+                        <el-button type="primary" class="butT" @click="handleCreate()">新建</el-button>
+ 
+                    </div>
+ 
+                    <el-table size="small" current-row-key="id" :data="dataList" stripe highlight-current-row>
+ 
+                        <el-table-column type="index" align="center" label="序号"></el-table-column>
+ 
+                        <el-table-column prop="type" label="图书类别" align="center"></el-table-column>
+ 
+                        <el-table-column prop="name" label="图书名称" align="center"></el-table-column>
+ 
+                        <el-table-column prop="description" label="描述" align="center"></el-table-column>
+ 
+                        <el-table-column label="操作" align="center">
+ 
+                            <template slot-scope="scope">
+ 
+                                <el-button type="primary" size="mini" @click="handleUpdate(scope.row)">编辑</el-button>
+ 
+                                <el-button type="danger" size="mini" @click="handleDelete(scope.row)">删除</el-button>
+ 
+                            </template>
+ 
+                        </el-table-column>
+ 
+                    </el-table>
+ 
+                    <!-- 新增标签弹层 -->
+ 
+                    <div class="add-form">
+ 
+                        <el-dialog title="新增图书" :visible.sync="dialogFormVisible">
+ 
+                            <el-form ref="dataAddForm" :model="formData" :rules="rules" label-position="right" label-width="100px">
+ 
+                                <el-row>
+ 
+                                    <el-col :span="12">
+ 
+                                        <el-form-item label="图书类别" prop="type">
+ 
+                                            <el-input v-model="formData.type"/>
+ 
+                                        </el-form-item>
+ 
+                                    </el-col>
+ 
+                                    <el-col :span="12">
+ 
+                                        <el-form-item label="图书名称" prop="name">
+ 
+                                            <el-input v-model="formData.name"/>
+ 
+                                        </el-form-item>
+ 
+                                    </el-col>
+ 
+                                </el-row>
+ 
+ 
+                                <el-row>
+ 
+                                    <el-col :span="24">
+ 
+                                        <el-form-item label="描述">
+ 
+                                            <el-input v-model="formData.description" type="textarea"></el-input>
+ 
+                                        </el-form-item>
+ 
+                                    </el-col>
+ 
+                                </el-row>
+ 
+                            </el-form>
+ 
+                            <div slot="footer" class="dialog-footer">
+ 
+                                <el-button @click="dialogFormVisible = false">取消</el-button>
+ 
+                                <el-button type="primary" @click="handleAdd()">确定</el-button>
+ 
+                            </div>
+ 
+                        </el-dialog>
+ 
+                    </div>
+ 
+                    <!-- 编辑标签弹层 -->
+ 
+                    <div class="add-form">
+ 
+                        <el-dialog title="编辑检查项" :visible.sync="dialogFormVisible4Edit">
+ 
+                            <el-form ref="dataEditForm" :model="formData" :rules="rules" label-position="right" label-width="100px">
+ 
+                                <el-row>
+ 
+                                    <el-col :span="12">
+ 
+                                        <el-form-item label="图书类别" prop="type">
+ 
+                                            <el-input v-model="formData.type"/>
+ 
+                                        </el-form-item>
+ 
+                                    </el-col>
+ 
+                                    <el-col :span="12">
+ 
+                                        <el-form-item label="图书名称" prop="name">
+ 
+                                            <el-input v-model="formData.name"/>
+ 
+                                        </el-form-item>
+ 
+                                    </el-col>
+ 
+                                </el-row>
+ 
+                                <el-row>
+ 
+                                    <el-col :span="24">
+ 
+                                        <el-form-item label="描述">
+ 
+                                            <el-input v-model="formData.description" type="textarea"></el-input>
+ 
+                                        </el-form-item>
+ 
+                                    </el-col>
+ 
+                                </el-row>
+ 
+                            </el-form>
+ 
+                            <div slot="footer" class="dialog-footer">
+ 
+                                <el-button @click="dialogFormVisible4Edit = false">取消</el-button>
+ 
+                                <el-button type="primary" @click="handleEdit()">确定</el-button>
+ 
+                            </div>
+ 
+                        </el-dialog>
+ 
+                    </div>
+ 
+                </div>
+ 
+            </div>
+ 
+        </div>
+ 
+    </body>
+ 
+    <!-- 引入组件库 -->
+ 
+    <script src="../js/vue.js"></script>
+ 
+    <script src="../plugins/elementui/index.js"></script>
+ 
+    <script type="text/javascript" src="../js/jquery.min.js"></script>
+ 
+    <script src="../js/axios-0.18.0.js"></script>
+ 
+    <script>
+        var vue = new Vue({
+ 
+            el: '#app',
+            data:{
+                pagination: {},
+                dataList: [],//当前页要展示的列表数据
+                formData: {},//表单数据
+                dialogFormVisible: false,//控制表单是否可见
+                dialogFormVisible4Edit:false,//编辑表单是否可见
+                rules: {//校验规则
+                    type: [{ required: true, message: '图书类别为必填项', trigger: 'blur' }],
+                    name: [{ required: true, message: '图书名称为必填项', trigger: 'blur' }]
+                }
+            },
+ 
+            //钩子函数，VUE对象初始化完成后自动执行
+            created() {
+                this.getAll();
+            },
+ 
+            methods: {
+                //列表
+                getAll() {
+                    //发送ajax请求
+                    axios.get("/books").then((res)=>{
+                        this.dataList = res.data.data;
+                    });
+                },
+ 
+                //弹出添加窗口
+                handleCreate() {
+                    this.dialogFormVisible = true;
+                    this.resetForm();
+                },
+ 
+                //重置表单
+                resetForm() {
+                    this.formData = {};
+                },
+ 
+                //添加
+                handleAdd () {
+                    //发送ajax请求
+                    axios.post("/books",this.formData).then((res)=>{
+                        console.log(res.data);
+                        //如果操作成功，关闭弹层，显示数据
+                        if(res.data.code == 20011){
+                            this.dialogFormVisible = false;
+                            this.$message.success("添加成功");
+                        }else if(res.data.code == 20010){
+                            this.$message.error("添加失败");
+                        }else{
+                            this.$message.error(res.data.msg);
+                        }
+                    }).finally(()=>{
+                        this.getAll();
+                    });
+                },
+ 
+                //弹出编辑窗口
+                handleUpdate(row) {
+                    // console.log(row);   //row.id 查询条件
+                    //查询数据，根据id查询
+                    axios.get("/books/"+row.id).then((res)=>{
+                        // console.log(res.data.data);
+                        if(res.data.code == 20041){
+                            //展示弹层，加载数据
+                            this.formData = res.data.data;
+                            this.dialogFormVisible4Edit = true;
+                        }else{
+                            this.$message.error(res.data.msg);
+                        }
+                    });
+                },
+ 
+                //编辑
+                handleEdit() {
+                    //发送ajax请求
+                    axios.put("/books",this.formData).then((res)=>{
+                        //如果操作成功，关闭弹层，显示数据
+                        if(res.data.code == 20031){
+                            this.dialogFormVisible4Edit = false;
+                            this.$message.success("修改成功");
+                        }else if(res.data.code == 20030){
+                            this.$message.error("修改失败");
+                        }else{
+                            this.$message.error(res.data.msg);
+                        }
+                    }).finally(()=>{
+                        this.getAll();
+                    });
+                },
+ 
+                // 删除
+                handleDelete(row) {
+                    //1.弹出提示框
+                    this.$confirm("此操作永久删除当前数据，是否继续？","提示",{
+                        type:'info'
+                    }).then(()=>{
+                        //2.做删除业务
+                        axios.delete("/books/"+row.id).then((res)=>{
+                            if(res.data.code == 20021){
+                                this.$message.success("删除成功");
+                            }else{
+                                this.$message.error("删除失败");
+                            }
+                        }).finally(()=>{
+                            this.getAll();
+                        });
+                    }).catch(()=>{
+                        //3.取消删除
+                        this.$message.info("取消删除操作");
+                    });
+                }
+            }
+        })
+ 
+    </script>
+ 
+</html>
+```
+
+## 5，拦截器
+
+### 5.1 拦截器概念
+
+**拦截器过程：** 
+
+![](<assets/1740015637519.png>)
+
+(1) 浏览器发送一个请求会先到 Tomcat 的 web 服务器
+
+(2)**Tomcat** 服务器接收到请求以后，会去**判断**请求的是**静态资源还是动态资源**
+
+(3) 如果是**静态资源**，会直接到 Tomcat 的项目部署目录下去**直接访问**
+
+(4) 如果是**动态资源**，就需要交给项目的**后台代码进行处**理
+
+(5) 在找到具体的方法之前，我们可以去配置**过滤器** (可以配置多个)，按照顺序进行执行
+
+(6) 然后进入到到**中央处理器 (SpringMVC 中的内容)**，**SpringMVC** 会根据配置的规则进行**拦截**，例如权限控制，不能让中央处理器能随便访问 controller
+
+(7) 如果满足规则，则进行处理，找到其对应的 controller 类中的方法进行执行, 完成后返回结果
+
+(8) 如果不满足规则，则不进行处理
+
+(9) 这个时候，如果我们需要在每个 Controller 方法执行的前后添加业务，具体该如何来实现?
+
+这个就是拦截器要做的事。
+
+**拦截器：** 
+
+*   **拦截器（Interceptor）**是一种**动态拦截方法**调用的机制，在 **SpringMVC 中动态拦截控制器方法**的执行
+*   **作用:**
+    *   在指定的方法调用**前、后**执行预先设定的代码
+    *   阻止原始方法的执行
+    *   总结：拦截器就是用来做**增强，**在不改变原始方法基础上，对其前中后进行拦截、放行、运行相关代码
+
+看完以后，大家会发现
+
+*   拦截器和过滤器在作用和执行顺序上也很相似
+
+**拦截器和过滤器之间的区别：**
+
+*   **归属不同：Filter** 属于 **Servlet 技术**，依赖于 Servlet 容器；**Interceptor** 属于 SpringMVC 技术，不依赖于 servlet 容器。
+*   **拦截内容不同：Filter** 对**所有访问**进行增强，几乎对所有请求起作用；**Interceptor** 仅针对 **SpringMVC** 的访问进行增强，只能对 action 请求起作用。
+*   **调用次数不同：**在 action 的生命周期中，**过滤器**只能在**容器初始化时被调用一次**，而**拦截器**可以**多次**被调用。
+*   **获取 bean 的权限不同：过滤器不能获取** IOC 容器中的各个 **bean**；**拦截器就可以，因为拦截器本身是个 bean**。这点很重要，在拦截器里注入一个 service，可以调用业务逻辑。
+*   **底层机制不同：**过滤器是基于函数回调，拦截器是基于 java 的反射机制的
+
+![](<assets/1740015637784.png>)
+
+### 5.2 拦截器入门案例
+
+#### 5.2.1 环境准备
+
+*   创建一个 Web 的 Maven 项目
+    
+*   pom.xml 添加 **Springmvc 所需 jar 包** javax.servlet-api,spring-webmvc,jackson-databind
+    
+    ```
+    <?xml version="1.0" encoding="UTF-8"?>
+     
+    <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+      <modelVersion>4.0.0</modelVersion>
+     
+      <groupId>com.itheima</groupId>
+      <artifactId>springmvc_12_interceptor</artifactId>
+      <version>1.0-SNAPSHOT</version>
+      <packaging>war</packaging>
+     
+      <dependencies>
+        <dependency>
+          <groupId>javax.servlet</groupId>
+          <artifactId>javax.servlet-api</artifactId>
+          <version>3.1.0</version>
+          <scope>provided</scope>
+        </dependency>
+        <dependency>
+          <groupId>org.springframework</groupId>
+          <artifactId>spring-webmvc</artifactId>
+          <version>5.2.10.RELEASE</version>
+        </dependency>
+        <dependency>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-databind</artifactId>
+          <version>2.9.0</version>
+        </dependency>
+      </dependencies>
+     
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.tomcat.maven</groupId>
+            <artifactId>tomcat7-maven-plugin</artifactId>
+            <version>2.1</version>
+            <configuration>
+              <port>80</port>
+              <path>/</path>
+            </configuration>
+          </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>8</source>
+                    <target>8</target>
+                </configuration>
+            </plugin>
+        </plugins>
+      </build>
+    </project>
+    ```
+    
+*   **创建 SpringMvcConfig,ServletConfig**，暂时不建 WebMvcSupport 放行静态资源
+    
+    ```
+    public class ServletContainersInitConfig extends AbstractAnnotationConfigDispatcherServletInitializer {
+        protected Class<?>[] getRootConfigClasses() {
+            return new Class[0];
+        }
+     
+        protected Class<?>[] getServletConfigClasses() {
+            return new Class[]{SpringMvcConfig.class};
+        }
+     
+        protected String[] getServletMappings() {
+            return new String[]{"/"};
+        }
+     
+        //乱码处理
+        @Override
+        protected Filter[] getServletFilters() {
+            CharacterEncodingFilter filter = new CharacterEncodingFilter();
+            filter.setEncoding("UTF-8");
+            return new Filter[]{filter};
+        }
+    }
+     
+    @Configuration
+    @ComponentScan({"com.itheima.controller"})
+    @EnableWebMvc
+    public class SpringMvcConfig{
+     
+    }
+    ```
+    
+*   **创建模型类 Book**
+    
+    ```
+    public class Book {
+        private String name;
+        private double price;
+     
+        public String getName() {
+            return name;
+        }
+     
+        public void setName(String name) {
+            this.name = name;
+        }
+     
+        public double getPrice() {
+            return price;
+        }
+     
+        public void setPrice(double price) {
+            this.price = price;
+        }
+     
+        @Override
+        public String toString() {
+            return "Book{" +
+                    "书名='" + name + '\'' +
+                    ", 价格=" + price +
+                    '}';
+        }
+    }
+    ```
+    
+*   **编写 Controller**
+    
+    ```
+    @RestController
+    @RequestMapping("/books")
+    public class BookController {
+     
+        @PostMapping
+        public String save(@RequestBody Book book){
+            System.out.println("book save..." + book);
+            return "{'module':'book save'}";
+        }
+     
+        @DeleteMapping("/{id}")
+        public String delete(@PathVariable Integer id){
+            System.out.println("book delete..." + id);
+            return "{'module':'book delete'}";
+        }
+     
+        @PutMapping
+        public String update(@RequestBody Book book){
+            System.out.println("book update..."+book);
+            return "{'module':'book update'}";
+        }
+     
+        @GetMapping("/{id}")
+        public String getById(@PathVariable Integer id){
+            System.out.println("book getById..."+id);
+            return "{'module':'book getById'}";
+        }
+     
+        @GetMapping
+        public String getAll(){
+            System.out.println("book getAll...");
+            return "{'module':'book getAll'}";
+        }
+    }
+    ```
+    
+
+最终创建好的项目结构如下:
+
+![](<assets/1740015638132.png>)
+
+#### 5.2.2 拦截器开发
+
+上一节 5.4.3 用过资源处理器放行静态资源。
+
+使用资源处理器，当访问**请求路径** /pages/???? 时候，从**文件** /pages 目录下查找内容。
+
+[【Java 笔记 + 踩坑】SpringMVC 基础_vincewm 的博客 - CSDN 博客](https://blog.csdn.net/qq_40991313/article/details/126393653 "【Java笔记+踩坑】SpringMVC基础_vincewm的博客-CSDN博客")
+
+**目标：拦截所有请求。**
+
+拦截器 interceptor 是在 controller 包下。 
+
+**步骤 1: 创建项目拦截器类**
+
+让项目拦截器类**实现 HandlerInterceptor 接口**，重写接口中的三个方法，**存放通用代码块**。
+
+```
+@Component
+//定义拦截处理器类，实现HandlerInterceptor接口
+//注意当前类必须受Spring容器控制，并被SpringMvc扫描到
+public class ProjectInterceptor implements HandlerInterceptor {
+    @Override
+    //处理之前，原始方法调用前执行的内容
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        System.out.println("preHandle...");
+        //返回true会放行，返回false会拦截，后面就不会再执行
+        return true;
+    }
+ 
+    @Override
+    //处理之后，原始方法调用后执行的内容
+    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) throws Exception {
+        System.out.println("postHandle...");
+    }
+ 
+    @Override
+    //拦截完成之后，原始方法调用完成后执行的内容
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
+        System.out.println("afterCompletion...");
+    }
+}
+```
+
+**注意: 拦截器类要被 SpringMVC 容器扫描到，并受到 Spring 的 IOC 容器控制。**
+
+**步骤 2:SpringMvcSupport 类或 SpringMvcConfig 类中配置拦截器类**
+
+**主要用方法二**，简单快速。
+
+**方法一（底层麻烦）：** SpringMvcSupport 在 config 目录下。
+
+```
+@Configuration
+public class SpringMvcSupport extends WebMvcConfigurationSupport {
+    //注入项目拦截器
+    @Autowired
+    private ProjectInterceptor projectInterceptor;
+    
+    //添加资源处理器，配置本地资源映射路径，在访问A（虚拟的）的时候，需要到B（实际的）的位置去访问。
+    @Override
+    protected void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/pages/**").addResourceLocations("/pages/");
+    }
+    //添加拦截器
+    @Override
+    protected void addInterceptors(InterceptorRegistry registry) {
+        //配置拦截器
+        registry.addInterceptor(projectInterceptor).addPathPatterns("/books","/books/*" );
+        //如果只拦截/books，发送http://localhost/books/100后会发现拦截器没有被执行
+        //registry.addInterceptor(projectInterceptor).addPathPatterns("/books");
+    }
+}
+```
+
+**方法二（简单快速）: 在 SpringMvcConfig 中添加拦截器**，就不用再新建配置类 SpringMvcSupport 了
+
+SpringMvcConfig **实现 WebMvcConfigurer 接口**，可以直接添加拦截器和资源处理器。`SpringMvcSupport`类就可以不再使用了。 
+
+```
+@Configuration
+//package1.config主要为了扫描项目拦截器类、ServletContainersInitConfig类
+@ComponentScan({"package1.controller","package1.config"})
+@EnableWebMvc
+public class SpringMvcConfig implements WebMvcConfigurer {
+    @Autowired
+    private ProjectInterception projectInterception;
+    //添加拦截器，配置本地资源映射路径，在访问A（虚拟的）的时候，需要到B（实际的）的位置去访问。
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(projectInterception).addPathPatterns("/books","/books/*");
+        //如果只拦截/books，发送http://localhost/books/100后会发现拦截器没有被执行
+        //registry.addInterceptor(projectInterceptor).addPathPatterns("/books");
+    }
+    //添加资源处理器
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/pages/**").addResourceLocations("/pages/");
+        registry.addResourceHandler("/js/**").addResourceLocations("/js/");
+        registry.addResourceHandler("/css/**").addResourceLocations("/css/");
+        registry.addResourceHandler("/plugins/**").addResourceLocations("/plugins/");
+ 
+    }
+}
+```
+
+**步骤 3:SpringMVC 添加 SpringMvcSupport 包扫描**
+
+```
+@Configuration
+@ComponentScan({"com.itheima.controller","com.itheima.config"})
+@EnableWebMvc
+public class SpringMvcConfig{
+ 
+}
+```
+
+**步骤 4: 运行程序测试**
+
+使用 PostMan 发送`http://localhost/books`
+
+![](<assets/1740015638336.png>)
+
+访问`http://localhost/books/100`，拦截器就会被执行。
+
+**注意：**
+
+拦截器中的**`preHandler`**方法，如果返回 **true**, 则**代表放行**，会执行原始 Controller 类中要请求的方法，如果返回 false，则代表拦截，后面的就不会再执行了。
+
+**拦截器的执行流程:**
+
+![](<assets/1740015638691.png>)
+
+当有拦截器后，请求会先进入 preHandle 方法，
+
+​ 如果方法返回 true，则放行继续执行后面的 handle[controller 的方法] 和后面的方法
+
+​ 如果返回 false，则直接跳过后面方法的执行。
+
+### 5.3 拦截器参数
+
+#### 5.3.1 前置处理方法
+
+原始方法之前运行 preHandle
+
+```
+public boolean preHandle(HttpServletRequest request,
+                         HttpServletResponse response,
+                         Object handler) throws Exception {
+    System.out.println("preHandle");
+    return true;
+}
+```
+
+*   request: 请求对象
+*   response: 响应对象
+*   **handler: 被调用的处理器对象**，**本质上是一个方法对象**，对反射中的 Method 对象进行了再包装
+
+使用 **request 对象**可以获取**请求数据中的内容**，如获取请求头的`Content-Type`
+
+```
+public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+    String contentType = request.getHeader("Content-Type");
+    System.out.println("preHandle..."+contentType);
+    return true;
+}
+```
+
+使用 **handler 参数**，可以获取**方法的相关信息**
+
+```
+public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+    HandlerMethod hm = (HandlerMethod)handler;
+    String methodName = hm.getMethod().getName();//可以获取方法的名称
+    System.out.println("preHandle..."+methodName);
+    return true;
+}
+```
+
+#### 5.3.2 后置处理方法
+
+原始方法运行后运行，如果原始方法被拦截，则不执行
+
+```
+public void postHandle(HttpServletRequest request,
+                       HttpServletResponse response,
+                       Object handler,
+                       ModelAndView modelAndView) throws Exception {
+    System.out.println("postHandle");
+}
+```
+
+前三个参数和上面的是一致的。
+
+**modelAndView:** 如果处理器执行完成具有返回结果，可以**读取到对应数据与页面信息**，并进行调整。因为咱们现在都是返回 json 数据，所以该参数的**使用率不高**。
+
+#### 5.3.3 完成处理方法
+
+拦截器最后执行的方法，无论原始方法是否执行
+
+```
+public void afterCompletion(HttpServletRequest request,
+                            HttpServletResponse response,
+                            Object handler,
+                            Exception ex) throws Exception {
+    System.out.println("afterCompletion");
+}
+```
+
+前三个参数与上面的是一致的。
+
+**ex:** 如果处理器执行过程中出现异常对象，可以**针对异常情况进行单独处理**
+
+因为我们现在**已经有全局异常处理器类**，所以该参数的**使用率也不高。**
+
+这三个方法中，最常用的是 **preHandle**, 在这个方法中可以通过返回值来决定是否要进行放行，我们可以把业务逻辑放在该方法中，如果满足业务则返回 true 放行，不满足则返回 false 拦截。
+
+### 5.4 拦截器链配置
+
+目前，我们在项目中只添加了一个拦截器，如果有多个，该如何配置? 配置多个后，执行顺序是什么?
+
+#### 5.4.1 配置多个拦截器
+
+**步骤 1: 创建拦截器类**
+
+实现接口，并重写接口中的方法
+
+```
+@Component
+public class ProjectInterceptor2 implements HandlerInterceptor {
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        System.out.println("preHandle...222");
+        return false;
+    }
+ 
+    @Override
+    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) throws Exception {
+        System.out.println("postHandle...222");
+    }
+ 
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
+        System.out.println("afterCompletion...222");
+    }
+}
+```
+
+**步骤 2: 配置拦截器类**
+
+```
+@Configuration
+@ComponentScan({"com.itheima.controller"})
+@EnableWebMvc
+//实现WebMvcConfigurer接口可以简化开发，但具有一定的侵入性
+public class SpringMvcConfig implements WebMvcConfigurer {
+    @Autowired
+    private ProjectInterceptor projectInterceptor;
+    @Autowired
+    private ProjectInterceptor2 projectInterceptor2;
+ 
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        //配置多拦截器
+        registry.addInterceptor(projectInterceptor).addPathPatterns("/books","/books/*");
+        registry.addInterceptor(projectInterceptor2).addPathPatterns("/books","/books/*");
+    }
+}
+```
+
+**步骤 3: 运行程序，观察顺序**
+
+![](<assets/1740015638894.png>)
+
+**拦截器执行的顺序是和配置顺序有关。**就和前面所提到的运维人员进入机房的案例，先进后出。
+
+*   当配置多个拦截器时，形成拦截器链
+*   拦截器链的运行顺序参照拦截器添加顺序为准
+*   **当拦截器中出现对原始处理器的拦截，后面的拦截器均终止运行**
+*   当**拦截器运行中断，仅运行配置在前面的拦截器的 afterCompletion 操作**
+
+![](<assets/1740015639145.png>)
+
+**preHandle：**与配置顺序相同，**必定运行**
+
+**postHandle:** 与配置顺序相反，可能不运行
+
+**afterCompletion:** 与配置顺序相反，可能不运行。
+
+这个顺序不太好记，最终只需要把握住一个原则即可: **以最终的运行结果为准**
